@@ -1,17 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ImageAnalysisResult, SunoPrompt } from '../types';
 
-const client = new Anthropic({
+// API 엔드포인트 사용 여부 결정 (Vercel 배포 시 사용)
+const USE_API_ENDPOINT = import.meta.env.VITE_USE_API_ENDPOINT === 'true';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+// 클라이언트 사이드 직접 호출 (로컬 개발용)
+const client = !USE_API_ENDPOINT ? new Anthropic({
   apiKey: import.meta.env.VITE_CLAUDE_API_KEY,
-  dangerouslyAllowBrowser: true, // Note: For production, use a backend proxy
-});
+  dangerouslyAllowBrowser: true,
+}) : null;
 
 export const convertImageToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const base64String = reader.result as string;
-      // Remove data URL prefix to get just the base64 string
       const base64Data = base64String.split(',')[1];
       resolve(base64Data);
     };
@@ -21,7 +25,36 @@ export const convertImageToBase64 = (file: File): Promise<string> => {
 };
 
 export const analyzeImage = async (base64Image: string, mediaType: string): Promise<ImageAnalysisResult> => {
-  const prompt = `당신은 시각 예술 분석 전문가입니다.
+  try {
+    // API 엔드포인트 사용 (Vercel/Netlify 등)
+    if (USE_API_ENDPOINT) {
+      const response = await fetch(`${API_BASE_URL}/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'analyze',
+          imageBase64: base64Image,
+          mediaType,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '이미지 분석에 실패했습니다.');
+      }
+
+      const result: ImageAnalysisResult = await response.json();
+      return result;
+    }
+
+    // 직접 Claude SDK 사용 (로컬 개발)
+    if (!client) {
+      throw new Error('Claude client not initialized');
+    }
+
+    const prompt = `당신은 시각 예술 분석 전문가입니다.
 주어진 이미지를 깊이 있게 분석하고, 다음 항목들을 포함한 JSON 형식으로 반환하세요:
 
 - description: 이미지의 주요 내용과 시각적 요소에 대한 상세한 설명 (2-3문장)
@@ -33,7 +66,6 @@ export const analyzeImage = async (base64Image: string, mediaType: string): Prom
 
 반드시 유효한 JSON 형식으로만 응답하세요. 다른 설명은 포함하지 마세요.`;
 
-  try {
     const message = await client.messages.create({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1024,
@@ -59,8 +91,6 @@ export const analyzeImage = async (base64Image: string, mediaType: string): Prom
     });
 
     const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
-
-    // Extract JSON from response (in case there's extra text)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to parse JSON response from Claude');
@@ -75,7 +105,35 @@ export const analyzeImage = async (base64Image: string, mediaType: string): Prom
 };
 
 export const generateSunoPrompt = async (analysisResult: ImageAnalysisResult): Promise<SunoPrompt> => {
-  const prompt = `당신은 음악 프롬프트 작성 전문가입니다.
+  try {
+    // API 엔드포인트 사용 (Vercel/Netlify 등)
+    if (USE_API_ENDPOINT) {
+      const response = await fetch(`${API_BASE_URL}/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'generate',
+          analysisResult,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Suno 프롬프트 생성에 실패했습니다.');
+      }
+
+      const result: SunoPrompt = await response.json();
+      return result;
+    }
+
+    // 직접 Claude SDK 사용 (로컬 개발)
+    if (!client) {
+      throw new Error('Claude client not initialized');
+    }
+
+    const prompt = `당신은 음악 프롬프트 작성 전문가입니다.
 다음 이미지 분석 결과를 바탕으로 Suno AI용 음악 프롬프트를 영어로 작성하세요.
 
 <이미지 분석 결과>
@@ -96,7 +154,6 @@ export const generateSunoPrompt = async (analysisResult: ImageAnalysisResult): P
 
 반드시 유효한 JSON 형식으로만 응답하세요.`;
 
-  try {
     const message = await client.messages.create({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1024,
@@ -109,8 +166,6 @@ export const generateSunoPrompt = async (analysisResult: ImageAnalysisResult): P
     });
 
     const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
-
-    // Extract JSON from response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to parse JSON response from Claude');

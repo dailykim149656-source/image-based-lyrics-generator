@@ -112,11 +112,38 @@ src/
 
 ## ⚠️ 주의사항
 
-- **API 키 보안**: 현재 구현은 프론트엔드에서 직접 API를 호출합니다 (`dangerouslyAllowBrowser: true`). 프로덕션 환경에서는 백엔드 프록시를 통해 API 키를 안전하게 관리하는 것을 권장합니다.
+- **API 키 보안**: 로컬 개발 시에는 브라우저에서 직접 API를 호출합니다 (`dangerouslyAllowBrowser: true`). **프로덕션 배포 시에는 Vercel/Netlify의 서버리스 함수를 사용하여 API 키를 안전하게 보호**합니다.
 
 - **파일 크기 제한**: 업로드 가능한 이미지 크기는 5MB로 제한되어 있습니다.
 
 - **지원 형식**: JPG, PNG, GIF, WEBP 형식의 이미지를 지원합니다.
+
+## 🚀 프로덕션 배포
+
+안전한 배포를 위해 **Vercel 또는 Netlify 사용을 강력히 권장**합니다.
+GitHub Pages는 API 키가 노출되므로 권장하지 않습니다.
+
+### Vercel 배포 (권장 ⭐)
+
+```bash
+# Vercel CLI 설치
+npm install -g vercel
+
+# 로그인 및 배포
+vercel login
+vercel
+```
+
+**환경 변수 설정** (Vercel Dashboard):
+- `CLAUDE_API_KEY` = (본인의 Claude API 키)
+- `VITE_USE_API_ENDPOINT` = `true`
+
+자세한 배포 가이드는 [DEPLOYMENT.md](./DEPLOYMENT.md) 참고
+
+### 로컬 개발 vs 프로덕션
+
+- **로컬**: 브라우저에서 직접 Claude API 호출 (`VITE_CLAUDE_API_KEY` 사용)
+- **프로덕션**: 서버리스 함수를 통한 안전한 API 호출 (`CLAUDE_API_KEY` 사용)
 
 ## 🔧 개발 스크립트
 
